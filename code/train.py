@@ -17,6 +17,9 @@ fake_label = 0.
 nz = 100  # Size of z latent vector (i.e. size of generator input)
 fixed_noise = torch.randn(64, nz, 1, 1, device=device)
 print('Device: {}'.format(device))
+print('Example of train samples:')
+show_images(train_data[:10][0])
+
 
 def choose_optimizer(discriminator, generator, netD, netG, lr_d=2e-4, lr_g=2e-3):
     """
@@ -33,6 +36,8 @@ def choose_optimizer(discriminator, generator, netD, netG, lr_d=2e-4, lr_g=2e-3)
         optimizerD = optim.Adam(netD.parameters(), lr=lr_d, betas=(0.5, 0.999))
     elif discriminator == 'RMSprop':
         optimizerD = optim.RMSprop(netD.parameters(), lr=lr_d)
+    elif discriminator == 'SGD':
+        optimizerD = optim.SGD(netD.parameters(), lr=lr_d, momentum=0.9)
     elif discriminator == 'zoVIA':
         optimizerD = zoVIA(netD, lr=lr_d)
     elif discriminator == 'zoESVIA':
@@ -44,6 +49,8 @@ def choose_optimizer(discriminator, generator, netD, netG, lr_d=2e-4, lr_g=2e-3)
         optimizerG = optim.Adam(netG.parameters(), lr=lr_g, betas=(0.5, 0.999))
     elif generator == 'RMSprop':
         optimizerG = optim.RMSprop(netG.parameters(), lr=lr_g)
+    elif generator == 'SGD':
+        optimizerG = optim.SGD(netG.parameters(), lr=lr_g, momentum=0.9)
     elif generator == 'zoVIA':
         optimizerG = zoVIA(netG, lr=lr_g)
     elif generator == 'zoESVIA':
@@ -97,7 +104,7 @@ def train_model(valid_data, test_data, dataloader,
     # ll = 1
     log_likelihoods.append(ll)
     print('Log-likelihood before training: ', ll, flush=True)
-
+    print('\n')
     # For each epoch
     for epoch in range(num_epochs):
         print('EPOCH #{}'.format(epoch+1))
