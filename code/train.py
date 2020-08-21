@@ -15,7 +15,7 @@ train_data, valid_data, test_data = get_data()
 real_label = 1.
 fake_label = 0.
 nz = 100  # Size of z latent vector (i.e. size of generator input)
-fixed_noise = torch.randn(64, nz, 1, 1, device=device)
+fixed_noise = torch.randn(20, nz, 1, 1, device=device)
 print('Device: {}'.format(device))
 print('Example of train samples:')
 show_images(train_data[:10][0])
@@ -67,7 +67,9 @@ def choose_optimizer(discriminator, generator, netD, netG, lr_d=2e-4, lr_g=2e-3)
 def train_model(valid_data, test_data, dataloader,
                 netD, netG, optimizerD, optimizerG,
                 num_epochs=10, discr_zo=False, gener_zo=False,
-                batch_size=32, tau=0.000001):
+                batch_size=32, tau=0.000001,
+                change_opt=(-1, -1, 'Adam', 'SGD', 2e-4, 2e-4),
+                img_every_epoch=False, log_like=True):
     """
     Train GAN function
 
@@ -85,8 +87,9 @@ def train_model(valid_data, test_data, dataloader,
     :param tau:
     :return: gan, img_list
     """
-    EPOCH_ZO_D = -1
-    EPOCH_ZO_G = -1
+    EPOCH_ZO_D, EPOCH_ZO_G, optimD_begin, optimG_begin, lr_d_begin,  lr_g_begin = change_opt
+    #EPOCH_ZO_D = -1
+    #EPOCH_ZO_G = -1
     img_list = []
     G_losses, D_losses = [], []
     log_likelihoods = []
@@ -95,13 +98,15 @@ def train_model(valid_data, test_data, dataloader,
 
     print("Starting Training Loop...")
 
-    generated_samples = generate_many_samples(netG, 512, batch_size).detach().cpu()
-    valid_samples = valid_data[np.random.choice(len(valid_data), 512, False)][0]
-    # valid_samples = valid_samples.to(next(model.parameters()).device)
-    test_samples = test_data[np.random.choice(len(test_data), 512, False)][0]
-    # test_samples = test_samples.to(next(model.parameters()).device)
-    ll = log_likelihood(generated_samples, valid_samples, test_samples)
-    # ll = 1
+    if log_like:
+        generated_samples = generate_many_samples(netG, 512, batch_size).detach().cpu()
+        valid_samples = valid_data[np.random.choice(len(valid_data), 512, False)][0]
+        # valid_samples = valid_samples.to(next(model.parameters()).device)
+        test_samples = test_data[np.random.choice(len(test_data), 512, False)][0]
+        # test_samples = test_samples.to(next(model.parameters()).device)
+        ll = log_likelihood(generated_samples, valid_samples, test_samples)
+    else:
+        ll = 1
     log_likelihoods.append(ll)
     print('Log-likelihood before training: ', ll, flush=True)
     print('\n')
@@ -129,7 +134,10 @@ def train_model(valid_data, test_data, dataloader,
                 gradsD_real = GradientEstimate_dicrs(netD, real_cpu, label, criterion, tau)
                 D_x = output.mean().item()
             elif discr_zo and epoch <= EPOCH_ZO_D:
-                optimizerD_01ep = optim.Adam(netD.parameters(), lr=2e-4, betas=(0.5, 0.999))
+                if optimD_begin == 'SGD':
+                    optimizerD_begin = optim.SGD(netD.parameters(), lr=lr_d_begin, momentum=0.9)
+                elif optimD_begin == 'Adam':
+                    optimizerD_begin = optim.Adam(netD.parameters(), lr=lr_d_begin, betas=(0.5, 0.999))
                 errD_real.backward()
                 D_x = output.mean().item()
             else:
@@ -137,7 +145,7 @@ def train_model(valid_data, test_data, dataloader,
                 errD_real.backward()
                 D_x = output.mean().item()
 
-                ## Train with all-fake batch
+            ## Train with all-fake batch
             # Generate batch of latent vectors
             noise = torch.randn(b_size, nz, 1, 1, device=device)
             # Generate fake image batch with G
@@ -154,14 +162,16 @@ def train_model(valid_data, test_data, dataloader,
                 D_G_z1 = output.mean().item()
                 errD = errD_real + errD_fake
                 gradsD = gradsD_real + gradsD_fake
-                data = []
-                optimizerD.step_update(netD, data, gradsD)
+                optimizerD.step_update(netD, gradsD)
             elif discr_zo and epoch <= EPOCH_ZO_D:
-                optimizerD_01ep = optim.Adam(netD.parameters(), lr=2e-4, betas=(0.5, 0.999))
+                if optimD_begin == 'SGD':
+                    optimizerD_begin = optim.SGD(netD.parameters(), lr=lr_d_begin, momentum=0.9)
+                elif optimD_begin == 'Adam':
+                    optimizerD_begin = optim.Adam(netD.parameters(), lr=lr_d_begin, betas=(0.5, 0.999))
                 errD_fake.backward()
                 D_G_z1 = output.mean().item()
                 errD = errD_real + errD_fake
-                optimizerD_01ep.step()
+                optimizerD_begin.step()
             else:
                 # Calculate the gradients for this batch
                 errD_fake.backward()
@@ -186,13 +196,16 @@ def train_model(valid_data, test_data, dataloader,
                 # grads_g = GradientEstimate(netD, fake, label, criterion)
                 grads_g = GradientEstimate(netG, netD, noise, label, criterion, tau)
                 D_G_z2 = output.mean().item()
-                data = []
-                optimizerG.step_update(netG, data, grads_g)
+                optimizerG.step_update(netG, grads_g)
             elif gener_zo and epoch <= EPOCH_ZO_G:
-                optimizerG_01ep = optim.Adam(netG.parameters(), lr=2e-4, betas=(0.5, 0.999))
+                if optimG_begin == 'SGD':
+                    optimizerG_begin = optim.SGD(netG.parameters(), lr=lr_g_begin, momentum=0.9)
+                elif optimG_begin == 'Adam':
+                    optimizerG_begin = optim.Adam(netG.parameters(), lr=lr_g_begin, betas=(0.5, 0.999))
+                #optimizerG_01ep = optim.Adam(netG.parameters(), lr=2e-4, betas=(0.5, 0.999))
                 errG.backward()
                 D_G_z2 = output.mean().item()
-                optimizerG_01ep.step()
+                optimizerG_begin.step()
             else:
                 errG.backward()
                 D_G_z2 = output.mean().item()
@@ -216,16 +229,21 @@ def train_model(valid_data, test_data, dataloader,
 
             iters += 1
 
+        if img_every_epoch:
+            print('after epoch {}'.format(epoch+1))
+            show_images(netG.to(device).generate_samples(10))
         print('EPOCH #{} time:'.format(epoch+1))
         timer(start_epoch, time.time())
 
-        generated_samples = generate_many_samples(netG, 512, batch_size).detach().cpu()
-        valid_samples = valid_data[np.random.choice(len(valid_data), 512, False)][0]
-        # valid_samples = valid_samples.to(next(model.parameters()).device)
-        test_samples = test_data[np.random.choice(len(test_data), 512, False)][0]
-        # test_samples = test_samples.to(next(model.parameters()).device)
-        ll = log_likelihood(generated_samples, valid_samples, test_samples)
-        # ll = 1
+        if log_like:
+            generated_samples = generate_many_samples(netG, 512, batch_size).detach().cpu()
+            valid_samples = valid_data[np.random.choice(len(valid_data), 512, False)][0]
+            # valid_samples = valid_samples.to(next(model.parameters()).device)
+            test_samples = test_data[np.random.choice(len(test_data), 512, False)][0]
+            # test_samples = test_samples.to(next(model.parameters()).device)
+            ll = log_likelihood(generated_samples, valid_samples, test_samples)
+        else:
+            ll = 1
         log_likelihoods.append(ll)
         print('Log-likelihood {} for epoch #{} \n'.format(ll, epoch+1))
 
@@ -240,18 +258,46 @@ def train_model(valid_data, test_data, dataloader,
 
 def main(optD, optG, num_epochs=5,
          discr_zo=False, gener_zo=False, save=True,
-         tau=0.000001, lr_d=2e-4, lr_g=2e-3):
+         tau=0.000001, lr_d=2e-4, lr_g=2e-3, batch_size=32,
+         change_opt=(-1, -1, 'Adam', 'SGD', 2e-4, 2e-4),
+         img_every_epoch=False, log_like=True):
     """
     Make main experiment
-    :param optD:
-    :param optG:
-    :param num_epochs:
-    :param discr_zo:
-    :param gener_zo:
-    :param save:
-    :param tau:
-    :param lr_d:
-    :param lr_g:
+    :param optD: str,
+                name of discriminator optimizer
+    :param optG: str,
+                name of generator optimizer
+    :param num_epochs: int,
+                number of epochs, default=5
+    :param discr_zo: bool,
+                True if discriminator optimizer is zero-order,
+                False otherwise, default=False
+    :param gener_zo: bool,
+                True if generator optimizer is zero-order,
+                False otherwise, default=False
+    :param save: bool,
+                if True save model and images, default=True
+    :param tau: float,
+                parameter for zo optimizer, default=0.000001
+    :param lr_d: float,
+                learning rate for discriminator optimizer, default=2e-4
+    :param lr_g: float,
+                learning rate for generator optimizer, default=2e-4
+    :param batch_size: int,
+                number of samples in batch, default=32,
+    :param change_opt: tuple, default=(-1,-1, 'Adam', 'SGD', 2e-4, 2e-4),
+            tuple with parameters EPOCH_ZO_D, EPOCH_ZO_G, optimD_begin, optimG_begin, lr_d_begin,  lr_g_begin
+            parameters for changing optimizer during training
+            EPOCH_ZO_D: int, epoch to change begin discriminator optimizer to ZO optimizer
+            EPOCH_ZO_G: int, epoch to change begin generator optimizer to ZO optimizer
+            optimD_begin: str, name of discriminator optimizer to start with
+            optimG_begin: str, name of generator optimizer to start with
+            lr_d_begin: float, learning rate for discriminator optimizer in the beginning of train
+            lr_g_begin: float, learning rate for generator optimizer in the beginning of train
+    :param img_every_epoch: bool,
+                if True show generator images after every epoch, default=False
+    :param ll: bool,
+                if True count log-likelihood every epoch, default=True
     :return: gan, img_list
     """
     if not os.path.exists('./experiments/'):
@@ -264,7 +310,6 @@ def main(optD, optG, num_epochs=5,
     netD = Discriminator().to(device)
     # print(netG, netD)
 
-    batch_size = 32
     dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     optimizerD, optimizerG = choose_optimizer(optD, optG, netD, netG,
                                               lr_d=lr_d, lr_g=lr_g)
@@ -272,7 +317,8 @@ def main(optD, optG, num_epochs=5,
                                 netD, netG, optimizerD, optimizerG,
                                 num_epochs=num_epochs, discr_zo=discr_zo,
                                 gener_zo=gener_zo, batch_size=batch_size,
-                                tau=tau)
+                                tau=tau, change_opt=change_opt,
+                                img_every_epoch=img_every_epoch, log_like=log_like)
 
     show_images(gan['netGenerator'].to(device).generate_samples(40))
     plot_losses(gan['generator_losses'], gan['discriminator_losses'], optD, optG, save=True)
@@ -285,7 +331,7 @@ def main(optD, optG, num_epochs=5,
         print('Model saved at {}'.format('./experiments/gan_' + path))
 
         with open('./experiments/imgs_' + path, 'wb') as handle:
-            pickle.dump(gan, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(img_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
         print('Control images for generator saved at {}'.format('./experiments/imgs_' + path))
 
     return gan, img_list

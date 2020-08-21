@@ -15,13 +15,15 @@ plt.rcParams['figure.figsize'] = (10.0, 6.0)
 digit_size = 14
 
 
-def show_images(x):
+def show_images(x, epoch=None):
     plt.figure(figsize=(12, 12 / 10 * (x.shape[0] // 10 + 1)))
     x = x.view(-1, digit_size, digit_size)
     for i in range(x.shape[0]):
         plt.subplot(x.shape[0] // 10 + 1, 10, i + 1)
         plt.imshow(x.data[i].cpu().numpy(), cmap='Greys_r', vmin=0, vmax=1, interpolation='lanczos')
         plt.axis('off')
+        if epoch is not None:
+            plt.savefig('./experiments/train_imgs' + epoch + '.png')
 
 
 def plot_losses(G_losses, D_losses, optD, optG, save=False):

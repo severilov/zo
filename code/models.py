@@ -13,7 +13,7 @@ nz = 100  # Size of z latent vector (i.e. size of generator input)
 
 # Create batch of latent vectors that we will use to visualize
 #  the progression of the generator
-fixed_noise = torch.randn(64, nz, 1, 1, device=device)
+fixed_noise = torch.randn(20, nz, 1, 1, device=device)
 
 
 class Reshape(nn.Module):

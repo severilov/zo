@@ -59,7 +59,7 @@ class zoVIA(Optimizer):
         # super(zoVIA, self).__init__(model, defaults)
         self.lr = lr
 
-    def step_update(self, model, data, grads):
+    def step_update(self, model, grads):
         loss = None
 
         flat_params = model.get_params()
@@ -75,7 +75,7 @@ class zoESVIA(Optimizer):
         # super(zoVIA, self).__init__(model, defaults)
         self.lr = lr
 
-    def step_update(self, model, data, grads):
+    def step_update(self, model, grads):
         loss = None
 
         flat_params = model.get_params()
@@ -91,7 +91,7 @@ class zoscESVIA(Optimizer):
         # super(zoVIA, self).__init__(model, defaults)
         self.lr = lr
 
-    def step_update(self, model, data, grads):
+    def step_update(self, model, grads):
         loss = None
 
         flat_params = model.get_params()

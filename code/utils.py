@@ -48,4 +48,3 @@ def timer(start, end):
     hours, rem = divmod(end-start, 3600)
     minutes, seconds = divmod(rem, 60)
     print("{:0>2}h:{:0>2}m:{:.0f}s".format(int(hours), int(minutes), seconds))
-
